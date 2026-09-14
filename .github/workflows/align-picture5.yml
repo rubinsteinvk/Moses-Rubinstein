@@ -8,10 +8,10 @@ on:
       - 'tools/align_picture5.py'
   workflow_dispatch:
     inputs:
-      youtube_url:
-        description: 'YouTube URL for the source recording'
-        required: true
-        default: 'https://www.youtube.com/watch?v=LjPlpQznQqI'
+      audio_url:
+        description: 'Direct URL of the audio file (MP3/WAV). Leave empty if source.wav or source.mp3 is already in the repository.'
+        required: false
+        default: ''
       model:
         description: 'Whisper model size'
         required: true
@@ -20,7 +20,7 @@ on:
         options: [small, medium, large-v3]
 
 env:
-  YOUTUBE_URL: ${{ inputs.youtube_url || 'https://www.youtube.com/watch?v=LjPlpQznQqI' }}
+  AUDIO_URL: ${{ inputs.audio_url || '' }}
   MODEL_SIZE: ${{ inputs.model || 'small' }}
 
 jobs:
@@ -29,23 +29,50 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
+
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+
       - name: Install PyTorch CPU and alignment stack
         run: |
           python -m pip install --upgrade pip
           pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install whisperx yt-dlp
-      - name: Download audio for analysis only
-        run: yt-dlp -x --audio-format wav --audio-quality 0 -o 'source.%(ext)s' "$YOUTUBE_URL"
+          pip install whisperx
+
+      - name: Obtain supplied audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$AUDIO_URL" ]]; then
+            echo "Downloading the user-supplied audio file from the provided direct URL"
+            curl -L --fail --retry 3 --output source.input "$AUDIO_URL"
+          elif [[ -f source.wav ]]; then
+            echo "Using repository file source.wav"
+            cp source.wav source.input
+          elif [[ -f source.mp3 ]]; then
+            echo "Using repository file source.mp3"
+            cp source.mp3 source.input
+          else
+            echo "ERROR: No supplied audio is available."
+            echo "The ChatGPT attachment is not visible to a GitHub-hosted runner."
+            echo "Provide a direct audio URL in 'audio_url', or place source.mp3/source.wav in the repository."
+            exit 1
+          fi
+
+      - name: Convert supplied audio to WAV
+        run: ffmpeg -y -i source.input -ar 16000 -ac 1 source.wav
+
       - name: Run German ASR and word alignment
         run: python tools/align_picture5.py source.wav data/picture5.json data/picture5-timing.json
+
       - name: Upload alignment result
         uses: actions/upload-artifact@v4
         with:
           name: picture5-word-alignment
           path: data/picture5-timing.json
+          retention-days: 7
