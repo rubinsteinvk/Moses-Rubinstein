@@ -1,0 +1,30 @@
+{
+  "work": "Moses, Op. 112",
+  "picture": 5,
+  "title": "O ew'ger Vater",
+  "source": {
+    "youtube": "https://www.youtube.com/watch?v=LjPlpQznQqI",
+    "boosey": "https://www.boosey.com/audio-clip/Anton-Rubinstein-Moses-1885-91/101473",
+    "audio_file": "Moses, Op. 112, Picture 5 Oh, Everlasting Father (Moses).mp3"
+  },
+  "timing_status": "pending_word_alignment",
+  "lines": [
+    {"de":["O","ew'ger","Vater,","höre","nicht,"],"ru":["О","вечный","Отец,","услышь","не"]},
+    {"de":["was","dieses","Volk","im","Wahne","spricht."],"ru":["что","этот","народ","в","заблуждении","говорит."]},
+    {"de":["Die","Knechtschaft","ist's,","die","sie","entmannt,"],"ru":["рабство","порабощение","есть,","которое","их","обессиливает,"]},
+    {"de":["noch","haben","sie","dich","nicht","erkannt!"],"ru":["ещё","имеют","они","тебя","не","познали!"]},
+    {"de":["Voll","Langmuth","bist","du","und","voll","Gnade,"],"ru":["полон","долготерпения","есть","ты","и","полон","милости,"]},
+    {"de":["o","lass","sie","deine","Allmacht","sehn,"],"ru":["о","дай","им","твоё","всемогущество","узреть,"]},
+    {"de":["und","lass","sie","auf","dem","Rettungspfade","gehn."],"ru":["и","дай","им","по","пути","спасения","идти."]},
+    {"de":["Hebe","den","Stab!"],"ru":["Подними","жезл!"]},
+    {"de":["So","spricht","zu","mir","der","Herr","des","Meeres","und","der","Wellen,"],"ru":["так","говорит","мне","Господь","моря","и","волн,"]},
+    {"de":["auf","dass","das","Meer","zum","Lande","werde,"],"ru":["чтобы","море","в","землю","стало,"]},
+    {"de":["ich","sende","meinen","Hauch","über","das","Meergestad,"],"ru":["я","посылаю","моё","дыхание","над","морским","берегом,"]},
+    {"de":["wie","Mauern","stehn","die","Wellen","und","trocken","liegt","der","Pfad."],"ru":["как","стены","стоят","волны","и","сухим","лежит","путь."]},
+    {"de":["Getrost,","Israel’s","Volk,"],"ru":["Мужайся,","Израиля","народ,"]},
+    {"de":["und","wandle","Hand","in","Hand"],"ru":["и","иди","рука","в","руку"]},
+    {"de":["durch","des","Schilfmeeres","Schooß"],"ru":["через","лоно","Тростникового моря"]},
+    {"de":["in","das","verheißne","Land."],"ru":["в","землю","обетованную."]},
+    {"de":["Ein","leises","Säuseln","weht,","seht!"],"ru":["тихий","шелест","веет,","смотрите!"]}
+  ]
+}
