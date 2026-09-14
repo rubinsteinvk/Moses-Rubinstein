@@ -1,6 +1,11 @@
 name: Align Moses Picture 5
 
 on:
+  push:
+    paths:
+      - '.github/workflows/align-picture5.yml'
+      - 'data/picture5.json'
+      - 'tools/align_picture5.py'
   workflow_dispatch:
     inputs:
       youtube_url:
@@ -12,10 +17,11 @@ on:
         required: true
         default: 'small'
         type: choice
-        options:
-          - small
-          - medium
-          - large-v3
+        options: [small, medium, large-v3]
+
+env:
+  YOUTUBE_URL: ${{ inputs.youtube_url || 'https://www.youtube.com/watch?v=LjPlpQznQqI' }}
+  MODEL_SIZE: ${{ inputs.model || 'small' }}
 
 jobs:
   align:
@@ -32,10 +38,8 @@ jobs:
       - name: Install alignment stack
         run: pip install whisperx yt-dlp
       - name: Download audio for analysis only
-        run: yt-dlp -x --audio-format wav --audio-quality 0 -o source.%(ext)s "${{ inputs.youtube_url }}"
+        run: yt-dlp -x --audio-format wav --audio-quality 0 -o source.%(ext)s "$YOUTUBE_URL"
       - name: Run German ASR and word alignment
-        env:
-          MODEL_SIZE: ${{ inputs.model }}
         run: python tools/align_picture5.py source.wav data/picture5.json data/picture5-timing.json
       - name: Upload alignment result
         uses: actions/upload-artifact@v4
