@@ -1,0 +1,44 @@
+name: Align Moses Picture 5
+
+on:
+  workflow_dispatch:
+    inputs:
+      youtube_url:
+        description: 'YouTube URL for the source recording'
+        required: true
+        default: 'https://www.youtube.com/watch?v=LjPlpQznQqI'
+      model:
+        description: 'Whisper model size'
+        required: true
+        default: 'small'
+        type: choice
+        options:
+          - small
+          - medium
+          - large-v3
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install alignment stack
+        run: pip install whisperx yt-dlp
+      - name: Download audio for analysis only
+        run: yt-dlp -x --audio-format wav --audio-quality 0 -o source.%(ext)s "${{ inputs.youtube_url }}"
+      - name: Run German ASR and word alignment
+        env:
+          MODEL_SIZE: ${{ inputs.model }}
+        run: python tools/align_picture5.py source.wav data/picture5.json data/picture5-timing.json
+      - name: Upload alignment result
+        uses: actions/upload-artifact@v4
+        with:
+          name: picture5-word-alignment
+          path: data/picture5-timing.json
