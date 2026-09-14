@@ -6,7 +6,7 @@ on:
       audio_url:
         description: 'Google Drive sharing URL or direct URL to MP3/WAV'
         required: true
-        default: 'https://drive.google.com/file/d/FILE_ID/view?usp=sharing'
+        default: ''
       model:
         description: 'Whisper model size'
         required: true
@@ -47,11 +47,11 @@ jobs:
           if [[ "$url" =~ drive\.google\.com/file/d/([^/]+)/view ]]; then
             file_id="${BASH_REMATCH[1]}"
             echo "Detected Google Drive file ID: $file_id"
-            gdown --id "$file_id" -O source.input
+            gdown "$file_id" -O source.input
           elif [[ "$url" =~ drive\.google\.com/open\?id=([^&]+) ]]; then
             file_id="${BASH_REMATCH[1]}"
             echo "Detected Google Drive file ID: $file_id"
-            gdown --id "$file_id" -O source.input
+            gdown "$file_id" -O source.input
           else
             echo "Using supplied direct audio URL"
             curl -L --fail --retry 3 --output source.input "$url"
