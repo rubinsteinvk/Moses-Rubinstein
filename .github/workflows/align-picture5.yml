@@ -8,18 +8,21 @@ on:
         required: true
         default: ''
       model:
-        description: 'Whisper model size'
+        description: 'Whisper model size (unused for forced alignment)'
         required: true
         default: 'small'
         type: choice
         options: [small, medium, large-v3]
+  push:
+    branches: [main]
 
 env:
-  AUDIO_URL: ${{ inputs.audio_url }}
+  AUDIO_URL: ${{ inputs.audio_url || 'https://drive.google.com/file/d/13TjCy78XBFHNND0EQwlsstGl4mMWqBYz/view?usp=drive_link' }}
   MODEL_SIZE: ${{ inputs.model || 'small' }}
 
 jobs:
   align:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[align-picture5]')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -62,7 +65,7 @@ jobs:
       - name: Convert supplied audio to WAV
         run: ffmpeg -y -i source.input -ar 16000 -ac 1 source.wav
 
-      - name: Run German ASR and word alignment
+      - name: Run German forced alignment against authoritative libretto
         run: python tools/align_picture5.py source.wav data/picture5.json data/picture5-timing.json
 
       - name: Upload alignment result
