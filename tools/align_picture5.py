@@ -1,5 +1,4 @@
 import json, os, re, sys
-from difflib import SequenceMatcher
 
 import torch
 import whisperx
@@ -12,25 +11,39 @@ def norm(s):
 
 def main(audio_path, source_json, out_json):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    compute_type = 'float16' if device == 'cuda' else 'int8'
-    model_size = os.environ.get('MODEL_SIZE', 'small')
-
-    print(f'Using WhisperX model={model_size}, device={device}, compute_type={compute_type}')
-    model = whisperx.load_model(model_size, device, compute_type=compute_type, language='de')
-    audio = whisperx.load_audio(audio_path)
-    result = model.transcribe(audio, batch_size=4, language='de')
-
-    align_model, metadata = whisperx.load_align_model(language_code='de', device=device)
-    aligned = whisperx.align(
-        result['segments'], align_model, metadata, audio, device,
-        return_char_alignments=False
-    )
 
     with open(source_json, encoding='utf-8') as f:
         src = json.load(f)
 
     target = [w for line in src['lines'] for w in line['de']]
-    target_norm = [norm(w) for w in target]
+    target_text = ' '.join(target)
+
+    print(f'Using known authoritative transcript: {len(target)} words')
+    print(f'Loading German forced-alignment model on {device}')
+
+    # Unlike the previous ASR->SequenceMatcher approach, do not ask Whisper to
+    # rediscover a text that we already know. Feed the authoritative libretto
+    # directly into WhisperX's phoneme-based forced aligner.
+    align_model, metadata = whisperx.load_align_model(
+        language_code='de', device=device
+    )
+    audio = whisperx.load_audio(audio_path)
+    duration = len(audio) / 16000.0
+
+    segments = [{
+        'start': 0.0,
+        'end': duration,
+        'text': target_text,
+    }]
+
+    aligned = whisperx.align(
+        segments,
+        align_model,
+        metadata,
+        audio,
+        device,
+        return_char_alignments=False,
+    )
 
     observed = []
     for seg in aligned.get('segments', []):
@@ -41,44 +54,60 @@ def main(audio_path, source_json, out_json):
                     'text': text,
                     'norm': norm(text),
                     'start': float(w['start']),
-                    'end': float(w['end'])
+                    'end': float(w['end']),
                 })
 
-    observed = [x for x in observed if x['norm']]
-    a = [x['norm'] for x in observed]
-    sm = SequenceMatcher(None, target_norm, a, autojunk=False)
-
+    # WhisperX normally returns the words in transcript order. Match each
+    # returned word to the authoritative word by normalized spelling, while
+    # allowing punctuation/orthography differences.
     timing = []
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == 'equal':
-            for ti, oi in zip(range(i1, i2), range(j1, j2)):
-                timing.append({
-                    'index': ti, 'de': target[ti],
-                    'start': observed[oi]['start'], 'end': observed[oi]['end'],
-                    'status': 'auto-aligned'
-                })
-        elif tag == 'replace' and (i2 - i1) == (j2 - j1):
-            for ti, oi in zip(range(i1, i2), range(j1, j2)):
-                timing.append({
-                    'index': ti, 'de': target[ti],
-                    'start': observed[oi]['start'], 'end': observed[oi]['end'],
-                    'status': 'auto-aligned-replace'
-                })
+    oi = 0
+    for ti, target_word in enumerate(target):
+        target_norm = norm(target_word)
+        found = None
+        for candidate in range(oi, min(oi + 3, len(observed))):
+            if observed[candidate]['norm'] == target_norm:
+                found = candidate
+                break
+        if found is None:
+            timing.append({
+                'index': ti,
+                'de': target_word,
+                'status': 'unmatched',
+            })
+            continue
 
-    timing.sort(key=lambda x: x['index'])
-    matched = {x['index'] for x in timing}
+        # Any skipped observed words are retained in diagnostics but not used
+        # for the authoritative timing list.
+        item = observed[found]
+        timing.append({
+            'index': ti,
+            'de': target_word,
+            'start': item['start'],
+            'end': item['end'],
+            'status': 'forced-aligned',
+        })
+        oi = found + 1
+
+    matched = [x for x in timing if 'start' in x and 'end' in x]
     out = {
         'source': src['source'],
-        'status': 'automatic_alignment_pending_manual_verification',
-        'observed_word_count': len(observed),
-        'matched_word_count': len(timing),
+        'status': 'forced_alignment_pending_manual_verification',
+        'audio_duration': duration,
+        'authoritative_word_count': len(target),
+        'matched_word_count': len(matched),
         'words': timing,
         'unmatched_authoritative_words': [
-            {'index': i, 'de': target[i]} for i in range(len(target)) if i not in matched
-        ]
+            {'index': x['index'], 'de': x['de']}
+            for x in timing if x.get('status') == 'unmatched'
+        ],
+        'method': 'WhisperX German phoneme forced alignment using authoritative libretto; no ASR transcription matching',
     }
+
     with open(out_json, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
+
+    print(f'Matched {len(matched)}/{len(target)} authoritative words')
 
 
 if __name__ == '__main__':
