@@ -74,3 +74,5 @@ if __name__=='__main__':
     if len(args)==3: main(*args)
     elif len(args)==4: main(*args)
     else: raise SystemExit('usage: align_picture5.py AUDIO SOURCE_JSON OUTPUT_JSON [MODEL_SIZE]')
+
+# Trigger a fresh full-recording alignment run after the workflow argument fix.
