@@ -22,17 +22,35 @@ def load_target(source_json):
 def asr_words(result):
     out = []
     for seg in result.get('segments', []):
-        for raw in re.findall(r"\S+", seg.get('text', '')):
-            n = norm(raw)
-            if n:
-                out.append({
-                    'text': raw,
-                    'norm': n,
-                    'start': float(seg['start']),
-                    'end': float(seg['end']),
-                    'segment_start': float(seg['start']),
-                    'segment_end': float(seg['end']),
-                })
+        # Critical: use Whisper's actual word timestamps when available.
+        # Segment-level start/end for every word collapses an entire sung phrase
+        # to one timestamp and was the main defect in the previous run.
+        seg_words = seg.get('words') or []
+        if seg_words:
+            for w in seg_words:
+                raw = (w.get('word') or '').strip()
+                n = norm(raw)
+                if n and w.get('start') is not None and w.get('end') is not None:
+                    out.append({
+                        'text': raw,
+                        'norm': n,
+                        'start': float(w['start']),
+                        'end': float(w['end']),
+                        'segment_start': float(seg['start']),
+                        'segment_end': float(seg['end']),
+                    })
+        else:
+            for raw in re.findall(r"\S+", seg.get('text', '')):
+                n = norm(raw)
+                if n:
+                    out.append({
+                        'text': raw,
+                        'norm': n,
+                        'start': float(seg['start']),
+                        'end': float(seg['end']),
+                        'segment_start': float(seg['start']),
+                        'segment_end': float(seg['end']),
+                    })
     return out
 
 
@@ -45,7 +63,7 @@ def add_anchor_map(target, observed):
         ai, bi, size = block
         for k in range(size):
             anchors[ai + k] = observed[bi + k]
-    return anchors, sm
+    return anchors
 
 
 def align_chunk(text, start, end, audio, align_model, metadata, device):
@@ -85,17 +103,18 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
     audio = whisperx.load_audio(audio_path)
     duration = len(audio) / 16000.0
 
-    # First obtain time-localized ASR segments. These are used only as coarse
-    # anchors; the final timings come from forced alignment of the authoritative
-    # libretto, constrained between real ASR anchors.
     asr_model = whisperx.load_model(
         model_size, device, compute_type=compute_type, language='de'
     )
-    result = asr_model.transcribe(audio, batch_size=4, language='de')
+    # Request word-level timestamps. These are the coarse temporal anchors;
+    # the final boundaries are subsequently refined by phoneme alignment.
+    result = asr_model.transcribe(
+        audio, batch_size=4, language='de', word_timestamps=True
+    )
     observed = asr_words(result)
-    print(f'ASR produced {len(observed)} coarse words')
+    print(f'ASR produced {len(observed)} word-level coarse words')
 
-    anchors, sm = add_anchor_map(target, observed)
+    anchors = add_anchor_map(target, observed)
     print(f'Exact normalized anchors: {len(anchors)}/{len(target)}')
 
     align_model, metadata = whisperx.load_align_model(
@@ -105,8 +124,6 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
     timing = [None] * len(target)
     anchor_indices = sorted(anchors)
 
-    # Keep exact ASR matches as anchors, but refine them with the phoneme aligner
-    # in small local windows whenever possible.
     for idx in anchor_indices:
         o = anchors[idx]
         timing[idx] = {
@@ -117,26 +134,21 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
             'status': 'asr-anchor',
         }
 
-    # Align each gap between neighboring anchors. The window is tied to actual
-    # audio locations, preventing the aligner from packing the whole libretto
-    # into the first 30-40 seconds as happened with a single 0-duration segment.
+    # Align each unresolved run only inside the real interval between its
+    # neighboring ASR word anchors. This prevents global time compression.
     boundaries = [-1] + anchor_indices + [len(target)]
     for left, right in zip(boundaries[:-1], boundaries[1:]):
         gap_start = left + 1
         gap_end = right - 1
         if gap_start > gap_end:
             continue
-
         start_time = 0.0 if left < 0 else timing[left]['rough_end']
         end_time = duration if right >= len(target) else timing[right]['rough_start']
         if end_time <= start_time + 0.08:
             continue
-
         text = ' '.join(target[gap_start:gap_end + 1])
         print(f'Aligning target {gap_start}:{gap_end} in {start_time:.2f}-{end_time:.2f}: {text}')
         words = align_chunk(text, start_time, end_time, audio, align_model, metadata, device)
-
-        # Map returned phoneme-aligned words to the authoritative gap.
         aw = [norm(x) for x in target[gap_start:gap_end + 1]]
         bw = [x['norm'] for x in words]
         local_sm = difflib.SequenceMatcher(None, aw, bw, autojunk=False)
@@ -152,16 +164,17 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
                         'status': 'forced-aligned-constrained',
                     }
 
-    # Refine anchors in local windows around their ASR locations. This also
-    # gives consistent phoneme boundaries rather than ASR segment boundaries.
+    # Refine every ASR anchor in a small local window, selecting the candidate
+    # closest to Whisper's actual word timestamp.
     for idx in anchor_indices:
         rough = timing[idx]
-        lo = max(0.0, rough['rough_start'] - 1.0)
-        hi = min(duration, rough['rough_end'] + 1.0)
+        lo = max(0.0, rough['rough_start'] - 1.5)
+        hi = min(duration, rough['rough_end'] + 1.5)
         words = align_chunk(target[idx], lo, hi, audio, align_model, metadata, device)
         candidates = [w for w in words if w['norm'] == norm(target[idx])]
         if candidates:
-            w = min(candidates, key=lambda x: abs((x['start'] + x['end']) / 2 - (rough['rough_start'] + rough['rough_end']) / 2))
+            center = (rough['rough_start'] + rough['rough_end']) / 2
+            w = min(candidates, key=lambda x: abs((x['start'] + x['end']) / 2 - center))
             timing[idx] = {
                 'index': idx,
                 'de': target[idx],
@@ -178,9 +191,8 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
                 'status': 'asr-anchor-unrefined',
             }
 
-    # Fill any remaining holes by linear interpolation between neighboring
-    # verified timings. These are explicitly marked as interpolated and are not
-    # presented as phoneme-level measurements.
+    # Remaining words are interpolated only between genuine word-level anchors.
+    # They remain explicitly marked as needing verification.
     known = [i for i, x in enumerate(timing) if x and 'start' in x and 'end' in x]
     for i in range(len(timing)):
         if timing[i] is not None:
@@ -189,20 +201,18 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
         nxt = min([j for j in known if j > i], default=None)
         if prev is not None and nxt is not None:
             a, b = timing[prev], timing[nxt]
-            frac0 = (i - prev) / (nxt - prev)
-            frac1 = (i + 1 - prev) / (nxt - prev)
-            s = a['end'] + (b['start'] - a['end']) * frac0
-            e = a['end'] + (b['start'] - a['end']) * frac1
+            gap = max(0.0, b['start'] - a['end'])
+            n = nxt - prev
+            s = a['end'] + gap * ((i - prev) / n)
+            e = a['end'] + gap * ((i + 1 - prev) / n)
         elif prev is not None:
             a = timing[prev]
-            span = max(0.05, duration - a['end'])
-            s = a['end'] + span * 0.02
-            e = a['end'] + span * 0.98
+            s = a['end']
+            e = duration if i == len(timing) - 1 else s
         elif nxt is not None:
             b = timing[nxt]
-            span = max(0.05, b['start'])
-            s = span * 0.02
-            e = span * 0.98
+            s = 0.0 if i == 0 else b['start']
+            e = b['start']
         else:
             s, e = 0.0, duration
         timing[i] = {
@@ -215,13 +225,13 @@ def main(audio_path, source_json, out_json, model_size='large-v3'):
 
     out = {
         'source': src['source'],
-        'status': 'coarse_asr_anchored_forced_alignment_pending_manual_verification',
+        'status': 'word_timestamp_asr_anchored_forced_alignment_pending_manual_verification',
         'audio_duration': duration,
         'authoritative_word_count': len(target),
         'matched_word_count': sum(1 for x in timing if x.get('status') != 'interpolated-pending-verification'),
         'words': timing,
-        'method': 'WhisperX large-v3 German ASR anchors + constrained phoneme forced alignment of authoritative libretto; interpolation only for unresolved words',
-        'verification_note': 'Use the full 0:00-2:50.266 recording. Timings are not final until checked against the audible vocal onset/offset.',
+        'method': 'WhisperX German word-timestamp ASR anchors + constrained phoneme forced alignment of authoritative libretto',
+        'verification_note': 'Full vocal recording is 0:00-2:50.266. Word timestamps must still be checked against audible onset and offset before publication.',
     }
     with open(out_json, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
