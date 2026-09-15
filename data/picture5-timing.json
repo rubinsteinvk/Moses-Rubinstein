@@ -1,11 +1,17 @@
 {
+  "source": {
+    "youtube": "https://www.youtube.com/watch?v=LjPlpQznQqI",
+    "boosey": "https://www.boosey.com/audio-clip/Anton-Rubinstein-Moses-1885-91/101473",
+    "audio_file": "Moses, Op. 112, Picture 5 Oh, Everlasting Father (Moses).mp3"
+  },
+  "status": "forced_text_alignment_with_one_probabilistic_word",
   "audio_duration": 170.266125,
   "authoritative_word_count": 97,
+  "asr_word_count": 99,
   "matched_word_count": 97,
-  "status": "forced_text_alignment_with_one_probabilistic_word",
   "source_run": 34995736650,
   "probabilistic_indices": [76],
-  "probabilistic_note": "Word 76 'und' is interpolated between Wellen (143.767–143.947) and trocken (143.987–144.187); estimated interval 143.967–143.977 seconds.",
+  "probabilistic_note": "Word 76 'und' is interpolated between Wellen (143.767–143.947) and trocken (143.987–144.187). Estimated interval: 143.967–143.977 seconds.",
   "words": [
     {"index":0,"de":"O","start":0.408,"end":0.468,"status":"full-asr-exact"},
     {"index":1,"de":"ew'ger","start":0.608,"end":0.888,"status":"full-asr-exact"},
@@ -17,7 +23,7 @@
     {"index":7,"de":"Volk","start":2.39,"end":2.67,"status":"full-asr-exact"},
     {"index":8,"de":"im","start":2.75,"end":2.85,"status":"full-asr-exact"},
     {"index":9,"de":"Wahne","start":2.87,"end":3.11,"status":"fuzzy-asr-0.89"},
-    {"index":10,"de":"spricht.","start":3.13,"end":4.0,"status":"forced-text-alignment"},
+    {"index":10,"de":"spricht.","start":3.13,"end":3.93,"status":"forced-text-alignment"},
     {"index":11,"de":"Die","start":25.597,"end":25.697,"status":"full-asr-exact"},
     {"index":12,"de":"Knechtschaft","start":25.717,"end":25.957,"status":"full-asr-exact"},
     {"index":13,"de":"ist's,","start":25.977,"end":26.158,"status":"full-asr-exact"},
