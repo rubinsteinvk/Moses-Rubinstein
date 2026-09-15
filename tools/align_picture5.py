@@ -91,5 +91,11 @@ def main(audio_path,source_json,anchor_json,out_json,model_size='large-v3'):
     print(f'Wrote {out_json}: {matched}/{len(target)} measured, {len(hard)} hard anchors')
 
 if __name__=='__main__':
-    if len(sys.argv) not in (5,6): raise SystemExit('usage: align_picture5.py AUDIO SOURCE_JSON ANCHORS_JSON OUTPUT_JSON [MODEL_SIZE]')
-    main(*sys.argv[1:])
+    args=sys.argv[1:]
+    if len(args)==4:
+        audio_path,source_json,out_json,model_size=args
+        main(audio_path,source_json,'data/picture5-anchors.json',out_json,model_size)
+    elif len(args)==5:
+        main(*args)
+    else:
+        raise SystemExit('usage: align_picture5.py AUDIO SOURCE_JSON OUTPUT_JSON MODEL_SIZE OR AUDIO SOURCE_JSON ANCHORS_JSON OUTPUT_JSON MODEL_SIZE')
