@@ -74,3 +74,5 @@ jobs:
           name: picture5-word-alignment
           path: data/picture5-timing.json
           retention-days: 7
+
+# Full recording is vocal from 0:00 through 2:50.266; no early cutoff is assumed.
