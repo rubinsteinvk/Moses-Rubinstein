@@ -65,8 +65,8 @@ jobs:
       - name: Convert supplied audio to WAV
         run: ffmpeg -y -i source.input -ar 16000 -ac 1 source.wav
 
-      - name: Run ASR-anchored constrained forced alignment
-        run: python tools/align_picture5.py source.wav data/picture5.json data/picture5-timing.json "$MODEL_SIZE"
+      - name: Run anchor-constrained phrase alignment
+        run: python tools/align_picture5.py source.wav data/picture5.json data/picture5-anchors.json data/picture5-timing.json "$MODEL_SIZE"
 
       - name: Upload alignment result
         uses: actions/upload-artifact@v4
@@ -75,4 +75,4 @@ jobs:
           path: data/picture5-timing.json
           retention-days: 7
 
-# Full recording is vocal from 0:00 through 2:50.266; no early cutoff is assumed.
+# This pass aligns only the 101 sung words supplied for Picture 5; the following chorus text is excluded.
